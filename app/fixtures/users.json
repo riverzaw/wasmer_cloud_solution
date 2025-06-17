@@ -1,0 +1,34 @@
+[
+  {
+    "model": "app.user",
+    "pk": "u_hobbyuser1",
+    "fields": {
+      "username": "hobby_user_1",
+      "plan": "HOBBY"
+    }
+  },
+  {
+    "model": "app.user",
+    "pk": "u_hobbyuser2",
+    "fields": {
+      "username": "hobby_user_2",
+      "plan": "HOBBY"
+    }
+  },
+  {
+    "model": "app.user",
+    "pk": "u_prouser1",
+    "fields": {
+      "username": "pro_user_1",
+      "plan": "PRO"
+    }
+  },
+  {
+    "model": "app.user",
+    "pk": "u_prouser2",
+    "fields": {
+      "username": "pro_user_2",
+      "plan": "PRO"
+    }
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "model": "app.deployedapp",
+    "pk": "app_hobbysite1",
+    "fields": {
+      "owner": "u_hobbyuser1",
+      "active": true
+    }
+  },
+  {
+    "model": "app.deployedapp",
+    "pk": "app_hobbyproject2",
+    "fields": {
+      "owner": "u_hobbyuser1",
+      "active": false
+    }
+  },
+  {
+    "model": "app.deployedapp",
+    "pk": "app_prostore1",
+    "fields": {
+      "owner": "u_prouser1",
+      "active": true
+    }
+  },
+  {
+    "model": "app.deployedapp",
+    "pk": "app_proservice2",
+    "fields": {
+      "owner": "u_prouser1",
+      "active": true
+    }
+  },
+  {
+    "model": "app.deployedapp",
+    "pk": "app_proinactive3",
+    "fields": {
+      "owner": "u_prouser1",
+      "active": false
+    }
+  },
+  {
+    "model": "app.deployedapp",
+    "pk": "app_anotherhobbyapp",
+    "fields": {
+      "owner": "u_hobbyuser2",
+      "active": true
+    }
+  }
+]
