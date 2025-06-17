@@ -86,7 +86,11 @@ class Mutation:
             raise Exception("Invalid user ID provided.")
         user_instance.plan = models.User.Plan.PRO
         await user_instance.asave()
-        return UserType(id=user_instance.id, username=user_instance.username, plan=user_instance.plan)
+        return UserType(
+            id=user_instance.id,
+            username=user_instance.username,
+            plan=user_instance.plan,
+        )
 
     @strawberry.mutation
     async def downgrade_account(self, info: Info, user_id: NodeID[str]) -> UserType:
@@ -97,7 +101,11 @@ class Mutation:
             raise Exception("Invalid user ID provided.")
         user_instance.plan = models.User.Plan.HOBBY
         await user_instance.asave()
-        return UserType(id=user_instance.id, username=user_instance.username, plan=user_instance.plan)
+        return UserType(
+            id=user_instance.id,
+            username=user_instance.username,
+            plan=user_instance.plan,
+        )
 
 
 schema = strawberry.Schema(
