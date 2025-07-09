@@ -247,3 +247,34 @@ query getUserEmails {
 
 
 ```
+
+
+
+## Celery tasks
+
+1. **GraphQL Mutation**: When `sendEmail` is called, it immediately returns `true` and queues a background task.
+
+2. **Credit Check Task**: The `send_email_with_credit_check` task:
+   - Checks if the user has sufficient credits (for hobby plan users)
+   - Deducts credits if needed
+   - Queues the actual email sending task
+
+3. **Email Sending Task**: The `send_email_task`:
+   - Retrieves the app's SMTP configuration
+   - Gets the appropriate provider client (MailerSend, SMTP2Go, etc.)
+   - Sends the email via SMTP
+   - Updates usage statistics (sent/failed counts)
+   - Retries up to 3 times on failure
+
+### Task Details
+
+#### `send_email_with_credit_check`
+- **Purpose**: Handles credit checking and queues the actual email sending
+- **Retries**: None (fails immediately if insufficient credits)
+- **Called from**: GraphQL mutation
+
+#### `send_email_task`
+- **Purpose**: Actually sends the email via SMTP
+- **Retries**: 3 times with 60-second delays
+- **Error Handling**: Updates usage statistics on failure
+- **Called from**: `send_email_with_credit_check` task
