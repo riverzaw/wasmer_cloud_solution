@@ -29,3 +29,6 @@ strawberry-graphql-django==0.62.0
 typing_extensions==4.14.0
 tzdata==2025.2
 uvicorn==0.34.3
+celery==5.3.6
+redis==5.2.1
+python-dotenv==1.1.1
