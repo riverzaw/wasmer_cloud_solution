@@ -115,13 +115,13 @@ The users configured in SMTP2Go will have addresses like app_1@user-1.emailchall
 MailerSend allows to configure only one SMTP user in free plan, so in the current project setup the previously created user needs to be deleted manually before a new one can be created.
 
 
-1.Set active provider for an app:
+1.Set active provider for an app (MAILERSEND or SMTP2GO in this case):
 
 ```bash
 mutation setAppProvider {
   setAppProvider(
-    appId: $appId
-    providerName: $providerName
+    appId: "app_hobby"
+    providerName: "SMTP2GO"
   )
 }
 ```
@@ -131,7 +131,7 @@ mutation setAppProvider {
 ```bash
 mutation provisionCredentials {
   provisionCredentials(
-    appId: $appId
+    appId: "app_hobby"
   ){
     provisioningStatus
     provisioningError
@@ -152,9 +152,9 @@ If the credentials have been already configured, the mutation will return the er
 
 ```bash
 query getProvisionStatus {
-  appSendingConfiguration(appId: $appId) {
+  appSendingConfiguration(appId: "app_hobby") {
     provisioningStatus
-    provisioninsError
+    provisioningError
   }
 } 
 ```
@@ -167,14 +167,18 @@ The provisioning status of the credentials will be set to SUCCESS once the provi
 ```bash
 mutation sendEmail {
   sendEmail(
-  appId: $appId
-  to: $to
-  subject: $subject
-  html: $html
+  appId: "app_hobby"
+  to: "hello@gmail.com"
+  subject: "Hi there"
+  html: "<body>This is an email.</body>"
 )}
 ```
 
-This will trigger a background job sending email via SMTP with the provider which is configured as active for the app.
+If owner of app is on HOBBY plan, their credits are deducted by 1. If they don't have credits, the mutation show an error:
+
+```"Insufficient credits."```
+
+The mutation will trigger a background job sending email via SMTP with the provider which is configured as active for the app.
 
 The job creates an entry in SentEmailLog table initially setting email status to QUEUED.
 In case of email sending failure, the status will be set to FAILED and error message will be added to the entry in SentEmailLog.
@@ -189,7 +193,7 @@ The field `time_read` is set to the time of "opened" event.
 
 ```bash
 mutation getSmtpCredentials {
-  getSmtpCredentials(appId: $appId) {
+  getSmtpCredentials(appId: "app_hobby") {
     host
     port
     username
@@ -203,11 +207,11 @@ mutation getSmtpCredentials {
 
 ```bash
 query getAppEmails {
-  node(id: $appId) {
+  node(id: "app_hobby") {
     ... on DeployedAppType {
       id
       totalEmailsCount
-      usage(groupBy: DAY | WEEK | MONTH, timeWindow: [start, end]) {
+      usage(groupBy: DAY | WEEK | MONTH, timeWindow: ["2025-07-01", "2025-07-03"]) {
         timestamp
         emails {
           total
@@ -224,7 +228,7 @@ query getAppEmails {
 
 ```bash
 query getUserEmails {
-  node(id: $userId) {
+  node(id: "u_hobbyist") {
     ... on UserType {
           id
           username
@@ -247,3 +251,34 @@ query getUserEmails {
 
 
 ```
+
+
+
+## Celery tasks
+
+1. **GraphQL Mutation**: When `sendEmail` is called, it immediately returns `true` and queues a background task.
+
+2. **Credit Check Task**: The `send_email_with_credit_check` task:
+   - Checks if the user has sufficient credits (for hobby plan users)
+   - Deducts credits if needed
+   - Queues the actual email sending task
+
+3. **Email Sending Task**: The `send_email_task`:
+   - Retrieves the app's SMTP configuration
+   - Gets the appropriate provider client (MailerSend, SMTP2Go, etc.)
+   - Sends the email via SMTP
+   - Updates usage statistics (sent/failed counts)
+   - Retries up to 3 times on failure
+
+### Task Details
+
+#### `send_email_with_credit_check`
+- **Purpose**: Handles credit checking and queues the actual email sending
+- **Retries**: None (fails immediately if insufficient credits)
+- **Called from**: GraphQL mutation
+
+#### `send_email_task`
+- **Purpose**: Actually sends the email via SMTP
+- **Retries**: 3 times with 60-second delays
+- **Error Handling**: Updates usage statistics on failure
+- **Called from**: `send_email_with_credit_check` task
