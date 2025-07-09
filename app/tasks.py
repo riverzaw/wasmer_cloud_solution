@@ -184,6 +184,7 @@ def provision_credentials_for_app(app_id: str, provider_id: int) -> bool:
     logger.info("Provisioning credentials for app %s", app_id)
     try:
         app = DeployedApp.objects.get(id=app_id)
+        app_data = {"id": app.id}
         provider = Provider.objects.get(id=provider_id)
         config = AppSendingConfiguration.objects.get(
             app=app, provider=provider, is_active=True
@@ -191,7 +192,7 @@ def provision_credentials_for_app(app_id: str, provider_id: int) -> bool:
         client = get_provider_client(
             provider.provider_type, provider.master_credentials
         )
-        credentials = client.provision_credentials_for_app(app)
+        credentials = client.provision_credentials_for_app(app_data)
         if credentials:
             config.credentials = credentials
             config.provisioning_status = (

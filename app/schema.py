@@ -341,7 +341,7 @@ class Mutation:
 
         if config.credentials:
             raise GraphQLError(
-                "Credentials have been already configured for this configuration."
+                "Credentials have been already configured for this app and provider."
             )
 
         config.provisioning_status = (

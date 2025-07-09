@@ -86,6 +86,8 @@ The API returns appropriate error messages when:
 
 ```bash
 pip install -r requirements.txt
+python manage.py migrate
+python manage.py loaddata users deployed_apps providers
 ```
 
 ### Testing
@@ -98,6 +100,150 @@ pytest
 ```
 
 
-## Notes
+### Notes
 - All GraphQL operations are handled asynchronously
 - The API uses DataLoaders to prevent N+1 query problems
+
+
+## Email usage scenario
+
+MailerSend and SMTP2Go are used in this project setup. They are both configured to use a dedicated domain.
+
+SMTP2Go allows us to use subdomains, so SMTP2GoProviderClient requests a subdomain for the user when new SMTP credentials are requested.
+The users configured in SMTP2Go will have addresses like app_1@user-1.emailchallengeirina.com.
+
+MailerSend allows to configure only one SMTP user in free plan, so in the current project setup the previously created user needs to be deleted manually before a new one can be created.
+
+
+1.Set active provider for an app:
+
+```bash
+mutation setAppProvider {
+  setAppProvider(
+    appId: $appId
+    providerName: $providerName
+  )
+}
+```
+
+2. Provision credentials with the selected provider:
+
+```bash
+mutation provisionCredentials {
+  provisionCredentials(
+    appId: $appId
+  ){
+    provisioningStatus
+    provisioningError
+    providerName
+  }
+}
+```
+
+This mutation will trigger a background job creating credentials for the new user via email provider API.
+If the credentials have been already configured, the mutation will return the error message:
+
+```bash
+"Credentials have been already configured for this app and provider."
+```
+
+
+3. The user can poll for status of the credentials provisioning:
+
+```bash
+query getProvisionStatus {
+  appSendingConfiguration(appId: $appId) {
+    provisioningStatus
+    provisioninsError
+  }
+} 
+```
+
+The provisioning status of the credentials will be set to SUCCESS once the provider returns the credentials to the background job.
+
+
+4. The user can now send an email with a mutation:
+
+```bash
+mutation sendEmail {
+  sendEmail(
+  appId: $appId
+  to: $to
+  subject: $subject
+  html: $html
+)}
+```
+
+This will trigger a background job sending email via SMTP with the provider which is configured as active for the app.
+
+The job creates an entry in SentEmailLog table initially setting email status to QUEUED.
+In case of email sending failure, the status will be set to FAILED and error message will be added to the entry in SentEmailLog.
+When email has been successfully processed via the background job, its status is set to SENT.
+Further status updates are handled via webhooks from providers. 
+Currently MailerSend and SMTP2Go are configured to send "delivered" and "opened" notifications which 
+result in DELIVERED and OPENED statuses accordingly.
+The field `time_read` is set to the time of "opened" event.
+
+
+5. The user can query for their SMTP credentials:
+
+```bash
+mutation getSmtpCredentials {
+  getSmtpCredentials(appId: $appId) {
+    host
+    port
+    username
+    password
+    provider
+  }
+}
+```
+
+6. Users and apps queries show their email statistics:
+
+```bash
+query getAppEmails {
+  node(id: $appId) {
+    ... on DeployedAppType {
+      id
+      totalEmailsCount
+      usage(groupBy: DAY | WEEK | MONTH, timeWindow: [start, end]) {
+        timestamp
+        emails {
+          total
+          failed
+          read
+          sent
+        }
+      }
+    }
+  }
+}
+```
+
+
+```bash
+query getUserEmails {
+  node(id: $userId) {
+    ... on UserType {
+          id
+          username
+          plan
+          emails {
+            sentEmailsCount
+            usage(groupBy: DAY, timeWindow: [start, end]) {
+              timestamp
+              emails {
+                total
+                failed
+                read
+                sent
+              }
+            }
+        }
+      }
+  }
+}
+
+
+```

@@ -208,7 +208,7 @@ class MailerSendClient(BaseProviderClient):
         r = requests.post(url, json=payload, headers=headers)
         data = r.json()
         if r.status_code != 201:
-            raise Exception("MailerSend error: {}".format(r.text))
+            raise Exception("MailerSend error: %s", r.text)
         credentials = {
             "username": data["data"]["username"],
             "from_email": data["data"]["username"],
@@ -249,7 +249,7 @@ class MailerSendClient(BaseProviderClient):
                 server.login(username, password)
                 server.send_message(msg)
             logger.info("Email sent successfully via %s", provider)
-            status = SentEmailLog.EmailStatusChoices.QUEUED
+            status = SentEmailLog.EmailStatusChoices.SENT
         except Exception as e:
             error_message = str(e)
             logger.error("Error sending email via %s: %s", provider, e, exc_info=True)
