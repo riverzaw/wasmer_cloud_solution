@@ -1,0 +1,20 @@
+[
+  {
+    "model": "app.provider",
+    "pk": "1",
+    "fields": {
+      "name": "MailerSend",
+      "provider_type": "MAILERSEND",
+      "master_credentials": {}
+    }
+  },
+  {
+    "model": "app.provider",
+    "pk": "2",
+    "fields": {
+      "name": "SMTP2Go",
+      "provider_type": "SMTP2GO",
+      "master_credentials": {}
+    }
+  }
+]
