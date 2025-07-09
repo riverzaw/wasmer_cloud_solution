@@ -1,6 +1,6 @@
 import pytest
 
-from .utils import app_factory, gql_client, user_factory
+from .utils import app_factory, gql_client, provider_factory, user_factory
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.django_db]
 
@@ -148,3 +148,59 @@ class TestUserQueries:
         """
         response = await gql_client.query(query)
         assert response["data"]["node"] is None
+
+
+class TestAppSendingConfigurationQuery:
+    async def test_app_sending_configuration_success(
+        self, gql_client, user_factory, app_factory, provider_factory
+    ):
+        user = await user_factory()
+        app = await app_factory(owner=user)
+        provider = await provider_factory()
+        from app.models import AppSendingConfiguration
+
+        config = await AppSendingConfiguration.objects.acreate(
+            app=app,
+            user=user,
+            provider=provider,
+            is_active=True,
+            credentials={},
+            provisioning_status="pending",
+            provisioning_error=None,
+        )
+        query = """
+            query($appId: String!) {
+                appSendingConfiguration(appId: $appId) {
+                    providerName
+                    provisioningStatus
+                    provisioningError
+                    app { id }
+                }
+            }
+        """
+        response = await gql_client.query(query, {"appId": app.id})
+        assert (
+            response["data"]["appSendingConfiguration"]["providerName"] == provider.name
+        )
+        assert (
+            response["data"]["appSendingConfiguration"]["provisioningStatus"]
+            == config.provisioning_status
+        )
+        assert response["data"]["appSendingConfiguration"]["provisioningError"] is None
+        assert response["data"]["appSendingConfiguration"]["app"][
+            "id"
+        ] == gql_client.encode_id("DeployedAppType", app.id)
+
+    async def test_app_sending_configuration_not_found(self, gql_client, app_factory):
+        app = await app_factory()
+        query = """
+            query($appId: String!) {
+                appSendingConfiguration(appId: $appId) {
+                    providerName
+                    provisioningStatus
+                    provisioningError
+                }
+            }
+        """
+        response = await gql_client.query(query, {"appId": app.id})
+        assert response["data"]["appSendingConfiguration"] is None

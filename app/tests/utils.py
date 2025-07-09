@@ -63,3 +63,23 @@ async def app_factory(user_factory):
         )
 
     return create_app
+
+
+@pytest.fixture
+async def provider_factory():
+    from app.models import Provider
+
+    async def create_provider(**kwargs):
+        name = kwargs.pop("name", fake.company())
+        provider_type = kwargs.pop("provider_type", "GENERIC_SMTP")
+        master_credentials = kwargs.pop("master_credentials", {})
+        credentials_format = kwargs.pop("credentials_format", {})
+        return await Provider.objects.acreate(
+            name=name,
+            provider_type=provider_type,
+            master_credentials=master_credentials,
+            credentials_format=credentials_format,
+            **kwargs,
+        )
+
+    return create_provider

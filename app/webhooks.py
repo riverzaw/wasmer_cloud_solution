@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def validate_mailersend_signature(request, signing_secret):
     """
-        Validates the MailerSend webhook signature.
+    Validates the MailerSend webhook signature.
     """
     try:
         signature = request.headers.get("Signature")
@@ -37,8 +37,8 @@ def validate_mailersend_signature(request, signing_secret):
 @csrf_exempt
 def mailersend_webhook(request):
     """
-        Receives "delivered" and "opened" events from MailerSend and
-        updates the SentEmailLog status accordingly.
+    Receives "delivered" and "opened" events from MailerSend and
+    updates the SentEmailLog status accordingly.
     """
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
@@ -84,8 +84,8 @@ def mailersend_webhook(request):
 @csrf_exempt
 def smtp2go_webhook(request):
     """
-        Receives "delivered" and "open" events from SMTP2GO and
-        updates the SentEmailLog status accordingly.
+    Receives "delivered" and "open" events from SMTP2GO and
+    updates the SentEmailLog status accordingly.
     """
     if request.method == "POST":
         try:
