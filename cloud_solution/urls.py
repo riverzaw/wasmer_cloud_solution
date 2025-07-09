@@ -19,6 +19,7 @@ class AsyncGraphQLContext(AsyncGraphQLView):
             "apps_by_owner": Loader().apps_by_owner,
             "user": Loader().user,
             "app": Loader().app,
+            "app_or_user": Loader().app_or_user,
         }
 
 
