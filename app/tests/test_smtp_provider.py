@@ -23,7 +23,7 @@ def app_data():
 def email_data():
     return {
         "app_id": "app123",
-        "user_id": "user_1",
+        "user_id": "u_1",
         "to": "to@example.com",
         "subject": "Test Subject",
         "from_email": "from@example.com",
@@ -48,11 +48,11 @@ def test_create_subdomain_for_app_success(mock_post, app_data):
     # Simulate subdomain already exists
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = {
-        "records": [{"name": f"user-1.testdomain.com"}]
+        "records": [{"name": f"u-1.testdomain.com"}]
     }
     with mock.patch.dict("os.environ", {"DOMAIN_NAME": "testdomain"}):
-        subdomain = create_subdomain_for_app({"owner_id": "user_1"})
-    assert subdomain == "user-1.testdomain.com"
+        subdomain = create_subdomain_for_app({"owner_id": "u_1"})
+    assert subdomain == "u-1.testdomain.com"
 
 
 @mock.patch("app.smtp_provider.requests.post")
@@ -72,9 +72,9 @@ def test_create_subdomain_for_app_create_new(mock_post, app_data):
     mock_post.side_effect = side_effect
     with mock.patch.dict("os.environ", {"DOMAIN_NAME": "testdomain"}):
         with mock.patch("app.smtp_provider.logger.info") as mock_log:
-            subdomain = create_subdomain_for_app({"owner_id": "user_1"})
-            assert subdomain == "user-1.testdomain"
-            mock_log.assert_called_with("Created subdomain %s", "user-1.testdomain")
+            subdomain = create_subdomain_for_app({"owner_id": "u_1"})
+            assert subdomain == "u-1.testdomain"
+            mock_log.assert_called_with("Created subdomain %s", "u-1.testdomain")
 
 
 @mock.patch("app.smtp_provider.requests.post")
@@ -82,7 +82,7 @@ def test_create_subdomain_for_app_error(mock_post, app_data):
     mock_post.return_value.status_code = 500
     mock_post.return_value.text = "error"
     with pytest.raises(Exception):
-        create_subdomain_for_app({"owner_id": "user_1"})
+        create_subdomain_for_app({"owner_id": "u_1"})
 
 
 @mock.patch("app.smtp_provider.requests.post")
@@ -96,7 +96,7 @@ def test_smtp2go_provision_credentials_success(mock_post, app_data):
     ):
         client = SMTP2GoClient({"api_key": "dummy_api_key"})
         creds = client.provision_credentials_for_app(
-            {"id": "app123", "owner_id": "user_1"}
+            {"id": "app123", "owner_id": "u_1"}
         )
         assert creds["username"] == "smtp_user"
         assert creds["from_email"] == "smtp_user@sub.domain.com"
@@ -114,7 +114,7 @@ def test_smtp2go_provision_credentials_error(mock_post, app_data):
     ):
         client = SMTP2GoClient({"api_key": "dummy_api_key"})
         with pytest.raises(Exception):
-            client.provision_credentials_for_app({"id": "app123", "owner_id": "user_1"})
+            client.provision_credentials_for_app({"id": "app123", "owner_id": "u_1"})
 
 
 @mock.patch("app.smtp_provider.smtplib.SMTP")
@@ -167,7 +167,7 @@ def test_mailersend_provision_credentials_error(mock_post, app_data):
     mock_post.return_value.text = "fail"
     client = MailerSendClient({"token": "dummy_token", "domain_id": "dummy_domain_id"})
     with pytest.raises(Exception):
-        client.provision_credentials_for_app({"id": "app123", "owner_id": "user_1"})
+        client.provision_credentials_for_app({"id": "app123", "owner_id": "u_1"})
 
 
 @mock.patch("app.smtp_provider.smtplib.SMTP")
@@ -201,7 +201,7 @@ def test_mailersend_send_email_error(
 def test_log_sent_email_success(mock_update):
     log_sent_email(
         app_id="app123",
-        user_id="user_1",
+        user_id="u_1",
         provider="SMTP2GO",
         to_email="to@example.com",
         subject="Test",
@@ -220,7 +220,7 @@ def test_log_sent_email_success(mock_update):
 def test_log_sent_email_error(mock_logger, mock_update):
     log_sent_email(
         app_id="app123",
-        user_id="user_1",
+        user_id="u_1",
         provider="SMTP2GO",
         to_email="to@example.com",
         subject="Test",
