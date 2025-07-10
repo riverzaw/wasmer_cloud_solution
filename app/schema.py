@@ -15,8 +15,8 @@ from strawberry_django.optimizer import DjangoOptimizerExtension
 
 from . import models
 from .models import EmailUsage
-from .tasks import (provision_credentials_for_app,
-                    send_email_with_credit_check, set_app_provider)
+from .tasks import (provision_credentials_for_app_task,
+                    send_email_with_credit_check, set_app_provider_task)
 
 
 @strawberry_django.type(models.EmailUsage)
@@ -317,7 +317,7 @@ class Mutation:
                 "Provider not found."
             )
 
-        set_app_provider.delay(
+        set_app_provider_task.delay(
             app_id=app_instance.id,
             user_id=app_instance.owner.id,
             provider_id=provider_instance.id,
@@ -347,7 +347,7 @@ class Mutation:
         config.provisioning_status = (
             models.AppSendingConfiguration.ProvisioningStatusChoices.PENDING
         )
-        provision_credentials_for_app.delay(
+        provision_credentials_for_app_task.delay(
             app_id=app_instance.id, provider_id=config.provider.id
         )
         return config

@@ -258,10 +258,11 @@ query getUserEmails {
 
 1. **GraphQL Mutation**: When `sendEmail` is called, it immediately returns `true` and queues a background task.
 
-2. **Credit Check Task**: The `send_email_with_credit_check` task:
+2. **Credit Check Task**: `send_email_with_credit_check`
    - Checks if the user has sufficient credits (for hobby plan users)
    - Deducts credits if needed
    - Queues the actual email sending task
+   - Called from GraphQL mutation
 
 3. **Email Sending Task**: The `send_email_task`:
    - Retrieves the app's SMTP configuration
@@ -269,16 +270,12 @@ query getUserEmails {
    - Sends the email via SMTP
    - Updates usage statistics (sent/failed counts)
    - Retries up to 3 times on failure
+   - Called from: `send_email_with_credit_check` task
 
-### Task Details
+4. **Set active provider Task**: `set_app_provider_task`
+   - Changes active provider for the app. Exactly one provider is always active for the app.
+   - Called from: GraphQL mutation
 
-#### `send_email_with_credit_check`
-- **Purpose**: Handles credit checking and queues the actual email sending
-- **Retries**: None (fails immediately if insufficient credits)
-- **Called from**: GraphQL mutation
-
-#### `send_email_task`
-- **Purpose**: Actually sends the email via SMTP
-- **Retries**: 3 times with 60-second delays
-- **Error Handling**: Updates usage statistics on failure
-- **Called from**: `send_email_with_credit_check` task
+5. **Provision credentials for app**: `provision_credentials_for_app_task`
+   - Calls active provider method for creating credentials for the app
+   - Called from GraphQL mutation

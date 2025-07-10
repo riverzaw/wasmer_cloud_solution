@@ -147,7 +147,7 @@ def send_email_with_credit_check(
 
 
 @shared_task
-def set_app_provider(app_id: str, user_id: str, provider_id: int) -> bool:
+def set_app_provider_task(app_id: str, user_id: str, provider_id: int) -> bool:
     logger.info(
         "Setting email provider %s for app_id %s, user_id %s",
         provider_id,
@@ -180,7 +180,7 @@ def set_app_provider(app_id: str, user_id: str, provider_id: int) -> bool:
 
 
 @shared_task
-def provision_credentials_for_app(app_id: str, provider_id: int) -> bool:
+def provision_credentials_for_app_task(app_id: str, provider_id: int) -> bool:
     logger.info("Provisioning credentials for app %s", app_id)
     try:
         app = DeployedApp.objects.get(id=app_id)
