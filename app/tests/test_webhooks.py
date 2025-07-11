@@ -156,6 +156,7 @@ class TestMailersendWebhook(TestCase):
     @patch("app.webhooks.SentEmailLog")
     def test_opened_success(self, mock_log, mock_getenv):
         mock_qs = MagicMock()
+        mock_qs.message_tag = "tag1"
         mock_qs.update.return_value = 1
         mock_log.objects.filter.return_value = mock_qs
         open_status_mock = MagicMock()

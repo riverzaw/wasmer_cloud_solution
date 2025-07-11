@@ -13,10 +13,17 @@ from strawberry.relay import Node, NodeID
 from strawberry.types import Info
 from strawberry_django.optimizer import DjangoOptimizerExtension
 
+from app.services.email_service import (EmailService, InsufficientCreditsError,
+                                        NoActiveSendingConfigError)
+from app.services.provider_service import (CredentialsAlreadyConfiguredError,
+                                           ProviderConfigNotFoundError,
+                                           ProviderNotFoundError,
+                                           ProviderService)
+from app.services.user_service import UserService
+
 from . import models
-from .models import EmailUsage
-from .tasks import (provision_credentials_for_app_task,
-                    send_email_with_credit_check, set_app_provider_task)
+from .models import AppSendingConfiguration, EmailUsage, Provider
+from .tasks import set_app_provider_task
 
 
 @strawberry_django.type(models.EmailUsage)
@@ -253,11 +260,7 @@ class AppSendingConfigurationType(Node):
 class Query:
     @strawberry.field
     async def node(self, info: Info, id: str) -> Optional[Node]:
-        if id.startswith("u_"):
-            return await info.context["app_or_user"].load(id)
-        elif id.startswith("app_"):
-            return await info.context["app_or_user"].load(id)
-        return None
+        return await info.context["app_or_user"].load(id)
 
     @strawberry.field
     async def app_sending_configuration(
@@ -282,23 +285,16 @@ class Mutation:
         user_instance = await info.context["app_or_user"].load(user_id)
         if not user_instance:
             raise GraphQLError("User not found.")
-        if not isinstance(user_instance, models.User):
-            raise GraphQLError("Invalid user ID provided.")
-        user_instance.plan = models.User.Plan.PRO
-        await user_instance.asave()
-        return user_instance
+        user = await UserService.upgrade_account(user_instance)
+        return user
 
     @strawberry.mutation
     async def downgrade_account(self, info: Info, user_id: NodeID[str]) -> UserType:
         user_instance = await info.context["app_or_user"].load(user_id)
         if not user_instance:
             raise GraphQLError("User not found.")
-        if not isinstance(user_instance, models.User):
-            raise GraphQLError("Invalid user ID provided.")
-        user_instance.plan = models.User.Plan.HOBBY
-        user_instance.credits = models.User.EMAIL_HOBBY_CREDITS
-        await user_instance.asave()
-        return user_instance
+        user = await UserService.downgrade_account(user_instance)
+        return user
 
     @strawberry.mutation
     async def set_app_provider(
@@ -307,51 +303,39 @@ class Mutation:
         app_instance = await info.context["app_or_user"].load(app_id)
         if not app_instance:
             raise GraphQLError("App not found.")
-
         try:
-            provider_instance = await models.Provider.objects.aget(
-                provider_type=provider_name
-            )
-        except models.Provider.DoesNotExist:
+            provider_instance = await Provider.objects.aget(provider_type=provider_name)
+        except Provider.DoesNotExist:
             raise GraphQLError("Provider not found.")
-
-        set_app_provider_task.delay(
-            app_id=app_instance.id,
-            user_id=app_instance.owner.id,
-            provider_id=provider_instance.id,
-        )
-
-        return True
+        try:
+            set_app_provider_task.delay(
+                app_instance.id, app_instance.owner_id, provider_instance.id
+            )
+            return True
+        except ProviderNotFoundError:
+            raise GraphQLError("Provider not found.")
 
     @strawberry.mutation
     async def provision_credentials(
         self, info: Info, app_id: NodeID[str]
     ) -> AppSendingConfigurationType:
         app_instance = await info.context["app_or_user"].load(app_id)
+        try:
+            config = await AppSendingConfiguration.objects.select_related(
+                "provider"
+            ).aget(app=app_instance, is_active=True)
+        except AppSendingConfiguration.DoesNotExist:
+            raise GraphQLError("Provider configuration not found.")
         if not app_instance:
             raise GraphQLError("App not found.")
         try:
-            config = await models.AppSendingConfiguration.objects.select_related(
-                "provider"
-            ).aget(app=app_instance, is_active=True)
-        except models.AppSendingConfiguration.DoesNotExist:
+            await ProviderService.provision_credentials(app_instance)
+        except ProviderConfigNotFoundError:
             raise GraphQLError("Provider configuration not found.")
-
-        if config.credentials:
+        except CredentialsAlreadyConfiguredError:
             raise GraphQLError(
                 "Credentials have been already configured for this app and provider."
             )
-
-        config.provisioning_status = (
-            models.AppSendingConfiguration.ProvisioningStatusChoices.PENDING
-        )
-        config.provisioning_error = None
-        await config.asave(update_fields=["provisioning_status", "provisioning_error"])
-        provision_credentials_for_app_task.delay(
-            app_id=app_instance.id,
-            owner_id=app_instance.owner.id,
-            provider_id=config.provider.id,
-        )
         return config
 
     @strawberry.mutation
@@ -360,34 +344,24 @@ class Mutation:
     ) -> SmtpCredentialsType:
         """
         Retrieves the SMTP credentials for an app's active sending configuration.
-        This will fail if the active provider does not support SMTP.
         """
         app_instance = await info.context["app_or_user"].load(app_id)
         if not isinstance(app_instance, models.DeployedApp):
             raise GraphQLError("Invalid app ID provided.")
 
         try:
-            config = await models.AppSendingConfiguration.objects.select_related(
-                "provider"
-            ).aget(app=app_instance, is_active=True)
-        except models.AppSendingConfiguration.DoesNotExist:
-            raise GraphQLError("No active sending configuration found for this app.")
-
-        provider_type = config.provider.provider_type
-        creds = config.credentials
-        try:
+            config = await ProviderService.get_smtp_credentials(app_instance)
             return SmtpCredentialsType(
-                host=creds["host"],
-                username=creds["username"],
-                password=creds["password"],
-                port=creds["port"],
-                provider=provider_type,
+                host=config["host"],
+                username=config["username"],
+                password=config["password"],
+                port=config["port"],
+                provider=config["provider"],
             )
-        except KeyError:
-            raise GraphQLError(
-                f"Stored SMTP credentials for provider '{provider_type}' are incomplete. "
-                "Please configure the SMTP credentials properly."
-            )
+        except ProviderConfigNotFoundError:
+            raise GraphQLError("No active sending configuration found.")
+        except ValueError as e:
+            raise GraphQLError(str(e))
 
     @strawberry.mutation
     async def send_email(
@@ -397,28 +371,14 @@ class Mutation:
         if not isinstance(app_instance, models.DeployedApp):
             raise GraphQLError("Invalid app ID provided.")
 
-        owner = app_instance.owner
-        if owner.plan == models.User.Plan.HOBBY and owner.credits <= 0:
-            usage, _ = await EmailUsage.objects.aget_or_create(
-                app=app_instance,
-                user=owner,
-                date=date.today(),
-            )
-            usage.failed_count += 1
-            await usage.asave()
-            raise GraphQLError("Insufficient credits.")
-
         try:
-            await models.AppSendingConfiguration.objects.aget(
-                app=app_instance, is_active=True
+            await EmailService.send_email(
+                app_instance.id, app_instance.owner.id, to, subject, html
             )
-        except models.AppSendingConfiguration.DoesNotExist:
+        except InsufficientCreditsError:
+            raise GraphQLError("Insufficient credits.")
+        except NoActiveSendingConfigError:
             raise GraphQLError("No active sending configuration found for this app.")
-
-        send_email_with_credit_check.delay(
-            app_id=app_id, to=to, subject=subject, html=html, user_id=owner.id
-        )
-
         return True
 
 

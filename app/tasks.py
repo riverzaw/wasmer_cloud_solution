@@ -1,28 +1,17 @@
 import logging
-from datetime import date
 
 from celery import shared_task
 from django.db import transaction
 
-from .models import AppSendingConfiguration, DeployedApp, EmailUsage
+from .models import AppSendingConfiguration
+from .services.user_service import UserService
 from .smtp_provider import get_provider_client
 
 logger = logging.getLogger(__name__)
 
 
-def update_email_usage(app_id: str, user_id: str, status: str):
-    usage, _ = EmailUsage.objects.get_or_create(
-        app_id=app_id, user_id=user_id, date=date.today()
-    )
-    if status == "FAIL":
-        usage.failed_count += 1
-    elif status == "SENT":
-        usage.sent_count += 1
-    usage.save(update_fields=["failed_count", "sent_count"])
-
-
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
-def send_email_task(self, app_id: str, to: str, subject: str, html: str, user_id: str):
+def send_email_task(self, app_id: str, user_id: str, to: str, subject: str, html: str):
     """
     Celery task to send email asynchronously.
 
@@ -33,10 +22,11 @@ def send_email_task(self, app_id: str, to: str, subject: str, html: str, user_id
         html: Email HTML content
         user_id: The ID of the user who owns the app
     """
+    from app.services.email_service import EmailService
+
     try:
         config = AppSendingConfiguration.objects.get(app_id=app_id, is_active=True)
     except AppSendingConfiguration.DoesNotExist:
-        update_email_usage(app_id=app_id, user_id=user_id, status="FAIL")
         raise Exception("No active sending configuration found for this app.")
 
     provider_client = get_provider_client(
@@ -55,10 +45,11 @@ def send_email_task(self, app_id: str, to: str, subject: str, html: str, user_id
     success = provider_client.send_email(config.credentials, email_data)
 
     if not success:
-        update_email_usage(app_id=app_id, user_id=user_id, status="FAIL")
+        EmailService.update_email_usage(app_id=app_id, user_id=user_id, status="FAIL")
         raise Exception("Failed to send email via SMTP")
 
-    update_email_usage(app_id=app_id, user_id=user_id, status="SENT")
+    EmailService.update_email_usage(app_id=app_id, user_id=user_id, status="SENT")
+    UserService.deduct_user_credits(app_id, user_id)
 
     logger.info(
         "Email sent successfully from %s to %s via %s",
@@ -67,54 +58,6 @@ def send_email_task(self, app_id: str, to: str, subject: str, html: str, user_id
         config.provider.provider_type,
     )
     return True
-
-
-def deduct_user_credits(app_id: str, user_id: str) -> bool:
-    from .models import User
-
-    try:
-        user = User.objects.get(id=user_id)
-        app_instance = DeployedApp.objects.get(id=app_id)
-
-        if user.plan == User.Plan.HOBBY:
-            if user.credits <= 0:
-                usage, _ = EmailUsage.objects.get_or_create(
-                    app=app_instance, user=user, date=date.today()
-                )
-                usage.failed_count += 1
-                usage.save()
-                raise Exception("Insufficient credits.")
-
-            user.credits -= 1
-            user.save(update_fields=["credits"])
-    except User.DoesNotExist:
-        logger.error("User %s not found", user_id)
-    except DeployedApp.DoesNotExist:
-        logger.error("DeployedApp %s not found", app_id)
-    except Exception as e:
-        logger.error(
-            "Failed to update user credits for app %s: ", app_id, e, exc_info=True
-        )
-    return True
-
-
-@shared_task
-def send_email_with_credit_check(
-    app_id: str, to: str, subject: str, html: str, user_id: str
-):
-    """
-    Task that checks credits before sending email.
-    This should be called from the GraphQL mutation.
-    """
-    try:
-        deduct_user_credits(app_id, user_id)
-        send_email_task.delay(app_id, to, subject, html, user_id)
-
-        return True
-
-    except Exception as e:
-        logger.error("Failed to queue email for app %s: %s", app_id, e, exc_info=True)
-        raise e
 
 
 def switch_app_provider(app_id: str, user_id: str, provider_id: int) -> bool:
