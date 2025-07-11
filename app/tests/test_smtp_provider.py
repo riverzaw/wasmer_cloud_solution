@@ -50,7 +50,7 @@ def test_create_subdomain_for_app_success(mock_post, app_data):
     mock_post.return_value.json.return_value = {
         "records": [{"name": f"u-1.testdomain.com"}]
     }
-    with mock.patch.dict("os.environ", {"DOMAIN_NAME": "testdomain"}):
+    with mock.patch.dict("os.environ", {"DOMAIN_NAME": "testdomain.com"}):
         subdomain = create_subdomain_for_app({"owner_id": "u_1"})
     assert subdomain == "u-1.testdomain.com"
 

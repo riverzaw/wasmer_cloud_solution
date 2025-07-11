@@ -313,9 +313,7 @@ class Mutation:
                 provider_type=provider_name
             )
         except models.Provider.DoesNotExist:
-            raise GraphQLError(
-                "Provider not found."
-            )
+            raise GraphQLError("Provider not found.")
 
         set_app_provider_task.delay(
             app_id=app_instance.id,
@@ -347,8 +345,12 @@ class Mutation:
         config.provisioning_status = (
             models.AppSendingConfiguration.ProvisioningStatusChoices.PENDING
         )
+        config.provisioning_error = None
+        await config.asave(update_fields=["provisioning_status", "provisioning_error"])
         provision_credentials_for_app_task.delay(
-            app_id=app_instance.id, provider_id=config.provider.id
+            app_id=app_instance.id,
+            owner_id=app_instance.owner.id,
+            provider_id=config.provider.id,
         )
         return config
 

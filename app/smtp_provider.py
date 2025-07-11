@@ -73,7 +73,7 @@ def create_subdomain_for_app(app_data: dict[str, Any]) -> str:
         subdomain = next(
             item
             for item in data["records"]
-            if item["name"] == f"{sanitized_user_id}.{EMAIL_DOMAIN}.com"
+            if item["name"] == f"{sanitized_user_id}.{EMAIL_DOMAIN}"
         )
         return subdomain["name"]
     except StopIteration:

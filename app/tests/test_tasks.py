@@ -105,7 +105,9 @@ def test_provision_credentials_for_app_task_success(mock_get, mock_get_client):
     mock_client = mock.Mock()
     mock_get_client.return_value = mock_client
     mock_client.provision_credentials_for_app.return_value = {"username": "user"}
-    result = tasks.provision_credentials_for_app_task(app_id="app_1", provider_id=1)
+    result = tasks.provision_credentials_for_app_task(
+        app_id="app_1", owner_id="u_1", provider_id=1
+    )
     assert result is True
     assert instance_mock.save.called
 
@@ -120,6 +122,8 @@ def test_provision_credentials_for_app_task_error(mock_get, mock_get_client):
     mock_client = mock.Mock()
     mock_get_client.return_value = mock_client
     mock_client.provision_credentials_for_app.side_effect = Exception("fail")
-    result = tasks.provision_credentials_for_app_task(app_id="app_1", provider_id=1)
+    result = tasks.provision_credentials_for_app_task(
+        app_id="app_1", owner_id="u_1", provider_id=1
+    )
     assert result is False
     assert instance_mock.save.called

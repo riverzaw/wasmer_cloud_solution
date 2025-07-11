@@ -147,10 +147,12 @@ def set_app_provider_task(app_id: str, user_id: str, provider_id: int) -> bool:
 
 
 @shared_task
-def provision_credentials_for_app_task(app_id: str, provider_id: int) -> bool:
+def provision_credentials_for_app_task(
+    app_id: str, owner_id: str, provider_id: int
+) -> bool:
     logger.info("Provisioning credentials for app %s", app_id)
     try:
-        app_data = {"id": app_id}
+        app_data = {"id": app_id, "owner_id": owner_id}
         config = AppSendingConfiguration.objects.get(
             app_id=app_id, provider_id=provider_id, is_active=True
         )
@@ -163,8 +165,14 @@ def provision_credentials_for_app_task(app_id: str, provider_id: int) -> bool:
             config.provisioning_status = (
                 AppSendingConfiguration.ProvisioningStatusChoices.SUCCESS
             )
-            config.save()
-            # config.save(update_fields=["credentials", "provisioning_status"])
+            config.provisioning_error = None
+            config.save(
+                update_fields=[
+                    "credentials",
+                    "provisioning_status",
+                    "provisioning_error",
+                ]
+            )
         logger.info(
             "Provisioned credentials for app %s with provider %s",
             app_id,
